@@ -21,7 +21,7 @@ func Render(cache MetadataCache, options RenderOptions) ([]byte, error) {
 	}
 	odooImportPath := strings.TrimRight(options.OdooImportPath, "/")
 	if odooImportPath == "" {
-		odooImportPath = "github.com/tomassicoffee/odoo-go"
+		odooImportPath = "github.com/TomassiCoffee/odoo-go"
 	}
 
 	var b bytes.Buffer

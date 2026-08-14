@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	odoo "github.com/tomassicoffee/odoo-go"
-	"github.com/tomassicoffee/odoo-go/internal/typegen"
+	odoo "github.com/TomassiCoffee/odoo-go"
+	"github.com/TomassiCoffee/odoo-go/internal/typegen"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 
 	flag.StringVar(&output, "output", "odoomodels/models_gen.go", "generated Go output file")
 	flag.StringVar(&packageName, "package", "odoomodels", "generated Go package name")
-	flag.StringVar(&odooImportPath, "odoo-import", "github.com/tomassicoffee/odoo-go", "import path used by generated code")
+	flag.StringVar(&odooImportPath, "odoo-import", "github.com/TomassiCoffee/odoo-go", "import path used by generated code")
 	flag.StringVar(&cacheFile, "cache", "odoomodels/models_metadata.json", "metadata cache file used as fallback")
 	flag.StringVar(&dotenv, "env", ".env", "optional .env file")
 	flag.StringVar(&modelsCSV, "models", "", "optional comma-separated Odoo model names; empty generates every model")

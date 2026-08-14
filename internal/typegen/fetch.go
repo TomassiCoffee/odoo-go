@@ -4,7 +4,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/tomassicoffee/odoo-go"
+	"github.com/TomassiCoffee/odoo-go"
 )
 
 type staticModel[T any] struct {

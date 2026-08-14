@@ -16,7 +16,7 @@ func TestRender(t *testing.T) {
 			{Name: "id", Type: FieldInteger},
 			{Name: "pos_reference", Type: FieldChar},
 		},
-	}}}, RenderOptions{PackageName: "odoomodels", OdooImportPath: "github.com/tomassicoffee/odoo-go"})
+	}}}, RenderOptions{PackageName: "odoomodels", OdooImportPath: "github.com/TomassiCoffee/odoo-go"})
 	if err != nil {
 		t.Fatal(err)
 	}

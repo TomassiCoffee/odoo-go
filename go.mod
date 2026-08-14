@@ -1,3 +1,3 @@
-module github.com/tomassicoffee/odoo-go
+module github.com/TomassiCoffee/odoo-go
 
-go 1.23.0
+go 1.24.0
