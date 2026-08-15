@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	var output string
+	var outputDir string
 	var packageName string
 	var odooImportPath string
 	var cacheFile string
@@ -23,7 +23,7 @@ func main() {
 	var modelsCSV string
 	var pageSize int
 
-	flag.StringVar(&output, "output", "odoomodels/models_gen.go", "generated Go output file")
+	flag.StringVar(&outputDir, "output-dir", "odoomodels/", "generated Go output directory")
 	flag.StringVar(&packageName, "package", "odoomodels", "generated Go package name")
 	flag.StringVar(&odooImportPath, "odoo-import", "github.com/TomassiCoffee/odoo-go", "import path used by generated code")
 	flag.StringVar(&cacheFile, "cache", "odoomodels/models_metadata.json", "metadata cache file used as fallback")
@@ -69,7 +69,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: requested %d models, generated metadata for %d\n", len(modelNames), len(cache.Models))
 	}
 
-	source, err := typegen.Render(cache, typegen.RenderOptions{
+	fmt.Printf("Generating using %d models and %d fields.\n", len(cache.Models), cache.FieldCount)
+	sources, err := typegen.Render(cache, typegen.RenderOptions{
 		PackageName:    packageName,
 		OdooImportPath: odooImportPath,
 	})
@@ -77,14 +78,16 @@ func main() {
 		fatal(err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
-		fatal(err)
+	for name, source := range sources{
+		if err := os.MkdirAll(filepath.Dir(outputDir), 0o755); err != nil {
+			fatal(err)
+		}
+		output := filepath.Join(outputDir, name + ".gen.go")
+		fmt.Printf("Writing output %s from %s.\n", output, cache.Source)
+		if err := os.WriteFile(output, source, 0o644); err != nil {
+			fatal(err)
+		}
 	}
-	if err := os.WriteFile(output, source, 0o644); err != nil {
-		fatal(err)
-	}
-
-	fmt.Printf("Generated %s from %s with %d models and %d fields.\n", output, cache.Source, len(cache.Models), cache.FieldCount)
 }
 
 func parseModelNames(csv string) []string {
