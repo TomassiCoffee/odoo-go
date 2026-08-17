@@ -78,11 +78,11 @@ func main() {
 		fatal(err)
 	}
 
-	for name, source := range sources{
+	for name, source := range sources {
 		if err := os.MkdirAll(filepath.Dir(outputDir), 0o755); err != nil {
 			fatal(err)
 		}
-		output := filepath.Join(outputDir, name + ".gen.go")
+		output := filepath.Join(outputDir, name+".gen.go")
 		fmt.Printf("Writing output %s from %s.\n", output, cache.Source)
 		if err := os.WriteFile(output, source, 0o644); err != nil {
 			fatal(err)

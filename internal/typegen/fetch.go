@@ -8,12 +8,14 @@ import (
 )
 
 type staticModel[T any] struct {
-	name   string
-	fields []string
+	name       string
+	fields     []string
+	recordType *T
 }
 
 func (m staticModel[T]) Name() string     { return m.name }
 func (m staticModel[T]) Fields() []string { return m.fields }
+func (m staticModel[T]) RecordType() *T   { return nil }
 
 type irModelRecord struct {
 	ID    int64            `json:"id"`
@@ -38,9 +40,10 @@ func Fetch(ctx context.Context, client *odoo.Client, pageSize int, modelNames []
 		modelDomain = odoo.Domain{odoo.Clause("model", "in", modelNames)}
 	}
 
-	models, err := readAllTyped[irModelRecord](ctx, client, staticModel[irModelRecord]{
-		name:   "ir.model",
-		fields: []string{"id", "model", "name"},
+	models, err := readAllTyped(ctx, client, staticModel[irModelRecord]{
+		name:       "ir.model",
+		fields:     []string{"id", "model", "name"},
+		recordType: nil,
 	}, odoo.SearchReadOptions{
 		Domain: modelDomain,
 		Order:  "model asc",
@@ -59,7 +62,7 @@ func Fetch(ctx context.Context, client *odoo.Client, pageSize int, modelNames []
 		return MetadataCache{Models: nil, FieldCount: 0, Source: "odoo"}, nil
 	}
 
-	fields, err := readAllTyped[irModelFieldRecord](ctx, client, staticModel[irModelFieldRecord]{
+	fields, err := readAllTyped(ctx, client, staticModel[irModelFieldRecord]{
 		name: "ir.model.fields",
 		fields: []string{
 			"name",

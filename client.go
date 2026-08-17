@@ -111,7 +111,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 	}, nil
 }
 
-func newOdooHTTPError(model, method string, statusCode int, status string, body []byte) error {
+func newOdooHTTPError(model string, method Method, statusCode int, status string, body []byte) error {
 	text := strings.TrimSpace(string(body))
 
 	var payload OdooErrorPayload
@@ -140,11 +140,7 @@ func newOdooHTTPError(model, method string, statusCode int, status string, body 
 	}
 }
 
-func (c *Client) Call(ctx context.Context, model string, method string, payload map[string]any, out any) error {
-	if payload == nil {
-		payload = map[string]any{}
-	}
-
+func (c *Client) Call(ctx context.Context, model string, method Method, payload Payload, out any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode Odoo JSON-2 payload for %s.%s: %w", model, method, err)
@@ -213,77 +209,6 @@ func (c *Client) Call(ctx context.Context, model string, method string, payload 
 	}
 
 	return fmt.Errorf("Odoo JSON-2 request failed for %s.%s", model, method)
-}
-
-func (c *Client) SearchReadRaw(ctx Context, model string, options SearchReadOptions) ([]json.RawMessage, error) {
-	stdCtx, ok := ctx.(context.Context)
-	if !ok {
-		stdCtx = context.Background()
-	}
-	var out []json.RawMessage
-	if err := c.Call(stdCtx, model, "search_read", options.Payload(), &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *Client) WriteRaw(ctx Context, model string, options WriteOptions) (bool, error) {
-	stdCtx, ok := ctx.(context.Context)
-	if !ok {
-		stdCtx = context.Background()
-	}
-	var out bool
-	if err := c.Call(stdCtx, model, "write", options.Payload(), &out); err != nil {
-		return false, err
-	}
-	return out, nil
-}
-
-func (c *Client) SearchReadRecords(ctx context.Context, model string, options SearchReadOptions) ([]Record, error) {
-	raw, err := c.SearchReadRaw(ctx, model, options)
-	if err != nil {
-		return nil, err
-	}
-
-	records := make([]Record, 0, len(raw))
-	for _, item := range raw {
-		var record Record
-		if err := json.Unmarshal(item, &record); err != nil {
-			return nil, err
-		}
-		records = append(records, record)
-	}
-	return records, nil
-}
-
-func SearchReadTyped[T any](ctx context.Context, reader RawSearchReader, model Model[T], options SearchReadOptions) ([]T, error) {
-	if options.Fields == nil {
-		options.Fields = model.Fields()
-	}
-	raw, err := reader.SearchReadRaw(ctx, model.Name(), options)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]T, 0, len(raw))
-	for _, item := range raw {
-		var value T
-		if err := json.Unmarshal(item, &value); err != nil {
-			return nil, fmt.Errorf("decode %s search_read record: %w", model.Name(), err)
-		}
-		out = append(out, value)
-	}
-	return out, nil
-}
-
-func WriteTyped[M any](
-	ctx context.Context,
-	writer RawWriter,
-	model Model[M],
-	ids []ID,
-	vals any,
-) (bool, error) {
-	return writer.WriteRaw(ctx, model.Name(), WriteOptions{IDs: ids, Vals: vals})
 }
 
 func firstEnv(names ...string) string {

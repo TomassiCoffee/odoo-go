@@ -1,6 +1,7 @@
 package odoo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -21,60 +22,277 @@ func Or() string  { return "|" }
 func And() string { return "&" }
 func Not() string { return "!" }
 
-type SearchReadOptions struct {
-	Domain  Domain
-	Fields  []string
-	Limit   *int
-	Offset  *int
-	Order   string
-	Context map[string]any
+type Payload interface {
+	isPayload()
 }
 
-func (o SearchReadOptions) Payload() map[string]any {
-	payload := map[string]any{
-		"domain": o.Domain,
-	}
-	if o.Fields != nil {
-		payload["fields"] = o.Fields
-	}
-	if o.Limit != nil {
-		payload["limit"] = *o.Limit
-	}
-	if o.Offset != nil {
-		payload["offset"] = *o.Offset
-	}
-	if o.Order != "" {
-		payload["order"] = o.Order
-	}
-	if o.Context != nil {
-		payload["context"] = o.Context
-	}
-	return payload
+type Caller interface {
+	Call(
+		ctx context.Context,
+		model string,
+		method Method,
+		options Payload,
+		out any,
+	) error
 }
+
+func (o SearchReadOptions) isPayload() {}
+
+type SearchReadOptions struct {
+	Domain  Domain         `json:"domain,omitempty"`
+	Fields  []string       `json:"fields,omitempty"`
+	Limit   *int           `json:"limit,omitempty"`
+	Offset  *int           `json:"offset,omitempty"`
+	Order   string         `json:"order,omitempty"`
+	Context map[string]any `json:"context,omitempty"`
+}
+
+func (o SearchOptions) isPayload() {}
+
+type SearchOptions struct {
+	Domain Domain `json:"domain"`
+	Limit  *int   `json:"limit,omitempty"`
+	Offset *int   `json:"offset,omitempty"`
+	Order  string `json:"order,omitempty"`
+}
+
+func (o ReadOptions) isPayload() {}
+
+type ReadOptions struct {
+	IDs    []ID     `json:"ids"`
+	Fields []string `json:"fields,omitempty"`
+
+	// Odoo default: "_classic_read"
+	//
+	// Optional, but exposing it lets the caller override the default.
+	Load *string `json:"load,omitempty"`
+}
+
+func (o CreateOptions[V]) isPayload() {}
+
+type CreateOptions[V any] struct {
+	// Required.
+	ValsList []V `json:"vals_list"`
+}
+
+func (o UnlinkOptions) isPayload() {}
+
+type UnlinkOptions struct {
+	// Required JSON/2 recordset selector.
+	IDs []ID `json:"ids"`
+}
+
+func (o ActionArchiveOptions) isPayload() {}
+
+type ActionArchiveOptions struct {
+	// Required JSON/2 recordset selector.
+	IDs []ID `json:"ids"`
+}
+
+func (o ActionUnarchiveOptions) isPayload() {}
+
+type ActionUnarchiveOptions struct {
+	// Required JSON/2 recordset selector.
+	IDs []ID `json:"ids"`
+}
+
+type SupportedFieldOps string
+
+const (
+	CheckFieldAccessRead  SupportedFieldOps = "read"
+	CheckFieldAccessWrite SupportedFieldOps = "write"
+)
+
+func (o CheckFieldAccessOptions) isPayload() {}
+
+type CheckFieldAccessOptions struct {
+	Field     string            `json:"field"`
+	Operation SupportedFieldOps `json:"operation"`
+}
+
+func (o CopyOptions) isPayload() {}
+
+type CopyOptions struct {
+	// copy() operates on a recordset.
+	IDs []ID `json:"ids"`
+
+	// Odoo default: null
+	Default *any `json:"default,omitempty"`
+}
+
+func (o CopyDataOptions) isPayload() {}
+
+type CopyDataOptions struct {
+	// copy_data() operates on a recordset.
+	IDs []ID `json:"ids"`
+
+	// Odoo default: null
+	Default *any `json:"default,omitempty"`
+}
+
+func (o DefaultGetOptions) isPayload() {}
+
+type DefaultGetOptions struct {
+	// Required.
+	Fields []string `json:"fields"`
+}
+
+func (o ExportDataOptions) isPayload() {}
+
+type ExportDataOptions struct {
+	// export_data() operates on a recordset.
+	IDs []ID `json:"ids"`
+
+	// Required.
+	FieldsToExport []string `json:"fields_to_export"`
+}
+
+func (o FieldsGetOptions) isPayload() {}
+
+type FieldsGetOptions struct {
+	// Odoo names this "allfields", not "all_fields".
+	// Default: null
+	AllFields *[]string `json:"allfields,omitempty"`
+
+	// Default: null
+	Attributes *[]string `json:"attributes,omitempty"`
+}
+
+func (o GetBaseUrlOptions) isPayload() {}
+
+type GetBaseUrlOptions struct {
+	IDs []ID `json:"ids"`
+}
+
+func (o GetExternalIdOptions) isPayload() {}
+
+type GetExternalIdOptions struct {
+	IDs []ID `json:"ids"`
+}
+
+func (o GetFieldTranslationsOptions) isPayload() {}
+
+type GetFieldTranslationsOptions struct {
+	// get_field_translations() operates on a recordset.
+	IDs []ID `json:"ids"`
+
+	// Documentation says str, not []string.
+	FieldName string `json:"field_name"`
+
+	// Default: null
+	Langs []string `json:"langs,omitempty"`
+}
+
+func (o GetMetadataOptions) isPayload() {}
+
+type GetMetadataOptions struct {
+	IDs []ID `json:"ids"`
+}
+
+func (o GetPropertyDefinitionOptions) isPayload() {}
+
+type GetPropertyDefinitionOptions struct {
+	FullName string `json:"full_name"`
+}
+
+func (o HasAccessOptions) isPayload() {}
+
+type HasAccessOptions struct {
+	IDs []ID `json:"ids"`
+
+	// Required.
+	Operation string `json:"operation"`
+}
+
+func (o HasFieldAccessOptions) isPayload() {}
+
+type HasFieldAccessOptions struct {
+	Field string `json:"field"`
+
+	// Documentation:
+	// Literal["read", "write"]
+	Operation SupportedFieldOps `json:"operation"`
+}
+
+func (o LoadOptions) isPayload() {}
+
+type LoadOptions struct {
+	// Both arguments are required according to the runtime documentation.
+	Data   any      `json:"data"`
+	Fields []string `json:"fields"`
+}
+
+func (o NameCreateOptions) isPayload() {}
+
+type NameCreateOptions struct {
+	Name string `json:"name"`
+}
+
+func (o NameSearchOptions) isPayload() {}
+
+type NameSearchOptions struct {
+	// Default: null
+	Domain *Domain `json:"domain,omitempty"`
+
+	// Default: 100
+	Limit *int `json:"limit,omitempty"`
+
+	// Default: ""
+	Name *string `json:"name,omitempty"`
+
+	// Default: "ilike"
+	Operator *string `json:"operator,omitempty"`
+}
+
+func (o OnchangeOptions) isPayload() {}
+
+type OnchangeOptions struct {
+	// Required JSON/2 recordset selector.
+	IDs []ID `json:"ids"`
+
+	// All three method arguments are required.
+	FieldNames []string       `json:"field_names"`
+	FieldsSpec map[string]any `json:"fields_spec"`
+	Values     map[string]any `json:"values"`
+}
+
+func (o SearchCountOptions) isPayload() {}
+
+type SearchCountOptions struct {
+	// Required.
+	Domain Domain `json:"domain"`
+
+	// Default: null
+	Limit *int `json:"limit,omitempty"`
+}
+
+func (o UpdateFieldTranslationsOptions) isPayload() {}
+
+type UpdateFieldTranslationsOptions struct {
+	// Required JSON/2 recordset selector.
+	IDs []ID `json:"ids"`
+
+	// Required.
+	FieldName string `json:"field_name"`
+
+	// Default: ""
+	SourceLang *string `json:"source_lang,omitempty"`
+
+	// Required.
+	Translations map[string]any `json:"translations"`
+}
+
+func (o WriteOptions) isPayload() {}
 
 type WriteOptions struct {
 	IDs  []ID `json:"ids"`
 	Vals any  `json:"vals"`
 }
 
-func (o WriteOptions) Payload() map[string]any {
-	payload := map[string]any{}
-	payload["ids"] = o.IDs
-	payload["vals"] = o.Vals
-	return payload
-}
-
 type Model[T any] interface {
 	Name() string
 	Fields() []string
-}
-
-type RawSearchReader interface {
-	SearchReadRaw(ctx Context, model string, options SearchReadOptions) ([]json.RawMessage, error)
-}
-
-type RawWriter interface {
-	WriteRaw(ctx Context, model string, options WriteOptions) (bool, error)
+	RecordType() *T
 }
 
 // Context is an alias so generated code does not depend on a concrete client type.
@@ -265,7 +483,7 @@ type OdooErrorPayload struct {
 
 type OdooHTTPError struct {
 	Model      string
-	Method     string
+	Method     Method
 	StatusCode int
 	Status     string
 	Payload    *OdooErrorPayload
