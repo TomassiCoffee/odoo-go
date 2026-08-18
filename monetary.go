@@ -19,6 +19,10 @@ type Monetary struct {
 	value *big.Rat
 }
 
+func (m *Monetary) GetRat() big.Rat{
+	return *m.value
+}
+
 func (m *Monetary) Abs() Monetary {
 	tmp := new(big.Rat)
 	return Monetary{value: tmp.Abs(m.value)}
