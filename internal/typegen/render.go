@@ -229,15 +229,7 @@ func writeBuilderSetter(
 	case FieldMonetary:
 		b.WriteString("\tv, err := odoo.NewMonetary(value)\n")
 		b.WriteString("\tif err != nil {\n")
-		b.WriteString("\t\tif b.err == nil {\n")
-
-		fmt.Fprintf(
-			b,
-			"\t\t\tb.err = fmt.Errorf(%q, err)\n",
-			field.Name+": %w",
-		)
-
-		b.WriteString("\t\t}\n")
+		fmt.Fprintf(b, "b.err = errors.Join(b.err, fmt.Errorf(\"tip_amount: %%w\", err))")
 		b.WriteString("\t\treturn b\n")
 		b.WriteString("\t}\n")
 
@@ -430,15 +422,7 @@ func writeCreateBuilder(
 			)
 
 			b.WriteString("\tif err != nil {\n")
-			b.WriteString("\t\tif b.err == nil {\n")
-
-			fmt.Fprintf(
-				b,
-				"\t\t\tb.err = fmt.Errorf(%q, err)\n",
-				field.Name+": %w",
-			)
-
-			b.WriteString("\t\t}\n")
+			fmt.Fprintf(b, "b.err = errors.Join(b.err, fmt.Errorf(\"tip_amount: %%w\", err))")
 			b.WriteString("\t} else {\n")
 
 			fmt.Fprintf(
