@@ -67,9 +67,11 @@ func renderModelHeader(b *bytes.Buffer, packageName string, odooImportPath strin
 	b.WriteString("// Generated from Odoo ir.model and ir.model.fields using JSON-2 search_read.\n\n")
 	fmt.Fprintf(b, "package %s\n\n", packageName)
 	b.WriteString("import (\n")
+	b.WriteString("\t\"fmt\"\n")
 	b.WriteString("\t\"context\"\n")
 	fmt.Fprintf(b, "\t\"%s\"\n", odooImportPath)
 	b.WriteString(")\n\n")
+	b.WriteString("var _ = fmt.Errorf\n\n")
 }
 
 func renderRegistryHeader(b *bytes.Buffer, packageName string, odooImportPath string) {
@@ -141,37 +143,11 @@ func renderModel(b *bytes.Buffer, model NormalizedModel, typeName string) {
 	}
 	b.WriteString("}\n\n")
 
-	fmt.Fprintf(b, "type %s_Create struct {\n", typeName)
-	for _, field := range model.Fields {
-		jsonName := field.Name
-		var fieldType string = readGoType(field.Type)
-		if !field.Required {
-			jsonName += ",omitempty"
-			fieldType = readWriteGoType(field.Type)
-		}
+	writeCreateStruct(b, typeName, model)
+	writeCreateBuilder(b, typeName, model)
 
-		fmt.Fprintf(
-			b,
-			"\t%s %s `json:%q odoo:%q`\n",
-			fieldNames[field.Name],
-			fieldType,
-			jsonName,
-			field.Name,
-		)
-	}
-	b.WriteString("}\n\n")
-
-	fmt.Fprintf(b, "type %s_Write struct {\n", typeName)
-	for _, field := range model.Fields {
-		fmt.Fprintf(b,
-			"\t%s %s `json:%q odoo:%q`\n",
-			fieldNames[field.Name],
-			readWriteGoType(field.Type),
-			field.Name+",omitempty",
-			field.Name,
-		)
-	}
-	b.WriteString("}\n\n")
+	writeWriteStruct(b, typeName, model)
+	writeWriteBuilder(b, typeName, model)
 
 	fmt.Fprintf(b, "type %sModel struct{}\n\n", typeName)
 	fmt.Fprintf(b, "func (%sModel) RecordType() *%s { return nil; }\n\n", typeName, typeName)
@@ -185,6 +161,409 @@ func renderModel(b *bytes.Buffer, model NormalizedModel, typeName string) {
 	b.WriteString("}\n\n")
 
 	renderMethodsAPICall(b, model, typeName)
+}
+
+func builderInputType(
+	fieldType SupportedFieldType,
+	storageType string,
+) string {
+	switch fieldType {
+	case FieldBinary,
+		FieldChar,
+		FieldDate,
+		FieldDatetime,
+		FieldHTML,
+		FieldSelection,
+		FieldText,
+		FieldMonetary:
+		return "string"
+
+	default:
+		return strings.TrimPrefix(storageType, "*")
+	}
+}
+
+func writeBuilderSetter(
+	b *bytes.Buffer,
+	builderType string,
+	field NormalizedField,
+	goName string,
+	storageType string,
+) {
+	inputType := builderInputType(field.Type, storageType)
+
+	fmt.Fprintf(
+		b,
+		"func (b *%s) With%s(value %s) *%s {\n",
+		builderType,
+		goName,
+		inputType,
+		builderType,
+	)
+
+	switch field.Type {
+	case FieldBinary,
+		FieldChar,
+		FieldDate,
+		FieldDatetime,
+		FieldHTML,
+		FieldSelection,
+		FieldText:
+
+		b.WriteString("\tv := odoo.NewFalseString(value)\n")
+
+		if strings.HasPrefix(storageType, "*") {
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = &v\n",
+				goName,
+			)
+		} else {
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = v\n",
+				goName,
+			)
+		}
+
+	case FieldMonetary:
+		b.WriteString("\tv, err := odoo.NewMonetary(value)\n")
+		b.WriteString("\tif err != nil {\n")
+		b.WriteString("\t\tif b.err == nil {\n")
+
+		fmt.Fprintf(
+			b,
+			"\t\t\tb.err = fmt.Errorf(%q, err)\n",
+			field.Name+": %w",
+		)
+
+		b.WriteString("\t\t}\n")
+		b.WriteString("\t\treturn b\n")
+		b.WriteString("\t}\n")
+
+		if strings.HasPrefix(storageType, "*") {
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = &v\n",
+				goName,
+			)
+		} else {
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = v\n",
+				goName,
+			)
+		}
+
+	default:
+		if strings.HasPrefix(storageType, "*") {
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = &value\n",
+				goName,
+			)
+		} else {
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = value\n",
+				goName,
+			)
+		}
+	}
+
+	b.WriteString("\treturn b\n")
+	b.WriteString("}\n\n")
+}
+
+
+func writeCreateStruct(
+	b *bytes.Buffer,
+	typeName string,
+	model NormalizedModel,
+) {
+	fieldNames := FieldGoNames(model.Fields)
+
+	fmt.Fprintf(
+		b,
+		"type %s_Create struct {\n",
+		typeName,
+	)
+
+	for _, field := range model.Fields {
+		jsonName := field.Name
+
+		if !field.Required {
+			jsonName += ",omitempty"
+		}
+
+		fmt.Fprintf(
+			b,
+			"\t%s %s `json:%q odoo:%q`\n",
+			fieldNames[field.Name],
+			createGoType(field),
+			jsonName,
+			field.Name,
+		)
+	}
+
+	b.WriteString("}\n\n")
+}
+
+
+func writeWriteStruct(
+	b *bytes.Buffer,
+	typeName string,
+	model NormalizedModel,
+) {
+	fieldNames := FieldGoNames(model.Fields)
+
+	fmt.Fprintf(
+		b,
+		"type %s_Write struct {\n",
+		typeName,
+	)
+
+	for _, field := range model.Fields {
+		fmt.Fprintf(
+			b,
+			"\t%s %s `json:%q odoo:%q`\n",
+			fieldNames[field.Name],
+			readWriteGoType(field.Type),
+			field.Name+",omitempty",
+			field.Name,
+		)
+	}
+
+	b.WriteString("}\n\n")
+}
+
+
+func writeCreateBuilder(
+	b *bytes.Buffer,
+	typeName string,
+	model NormalizedModel,
+) {
+	fieldNames := FieldGoNames(model.Fields)
+	builderType := typeName + "CreateBuilder"
+
+	// Builder storage.
+	fmt.Fprintf(
+		b,
+		"type %s struct {\n"+
+			"\tvalue %s_Create\n"+
+			"\terr error\n"+
+			"}\n\n",
+		builderType,
+		typeName,
+	)
+
+	// Constructor.
+	//
+	// Every Odoo-required field becomes a required Go constructor argument.
+	fmt.Fprintf(
+		b,
+		"func New%s(\n",
+		builderType,
+	)
+
+	for _, field := range model.Fields {
+		if !field.Required {
+			continue
+		}
+
+		goName := fieldNames[field.Name]
+		storageType := createGoType(field)
+
+		fmt.Fprintf(
+			b,
+			"\tv%s %s,\n",
+			goName,
+			builderInputType(field.Type, storageType),
+		)
+	}
+
+	fmt.Fprintf(
+		b,
+		") *%s {\n",
+		builderType,
+	)
+
+	fmt.Fprintf(
+		b,
+		"\tb := &%s{value: %s_Create{}}\n",
+		builderType,
+		typeName,
+	)
+
+	// Convert / assign required constructor fields.
+	for _, field := range model.Fields {
+		if !field.Required {
+			continue
+		}
+
+		goName := fieldNames[field.Name]
+
+		switch field.Type {
+		case FieldBinary,
+			FieldChar,
+			FieldDate,
+			FieldDatetime,
+			FieldHTML,
+			FieldSelection,
+			FieldText:
+
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = odoo.NewFalseString(v%s)\n",
+				goName,
+				goName,
+			)
+
+		case FieldMonetary:
+			localName := "value" + goName
+
+			fmt.Fprintf(
+				b,
+				"\t%s, err := odoo.NewMonetary(v%s)\n",
+				localName,
+				goName,
+			)
+
+			b.WriteString("\tif err != nil {\n")
+			b.WriteString("\t\tif b.err == nil {\n")
+
+			fmt.Fprintf(
+				b,
+				"\t\t\tb.err = fmt.Errorf(%q, err)\n",
+				field.Name+": %w",
+			)
+
+			b.WriteString("\t\t}\n")
+			b.WriteString("\t} else {\n")
+
+			fmt.Fprintf(
+				b,
+				"\t\tb.value.%s = %s\n",
+				goName,
+				localName,
+			)
+
+			b.WriteString("\t}\n")
+
+		default:
+			fmt.Fprintf(
+				b,
+				"\tb.value.%s = v%s\n",
+				goName,
+				goName,
+			)
+		}
+	}
+
+	b.WriteString("\treturn b\n")
+	b.WriteString("}\n\n")
+
+	// Optional create setters only.
+	for _, field := range model.Fields {
+		if field.Required {
+			continue
+		}
+
+		goName := fieldNames[field.Name]
+
+		writeBuilderSetter(
+			b,
+			builderType,
+			field,
+			goName,
+			createGoType(field),
+		)
+	}
+
+	// Build.
+	fmt.Fprintf(
+		b,
+		"func (b *%s) Build() (%s_Create, error) {\n",
+		builderType,
+		typeName,
+	)
+
+	b.WriteString("\tif b.err != nil {\n")
+
+	fmt.Fprintf(
+		b,
+		"\t\treturn %s_Create{}, b.err\n",
+		typeName,
+	)
+
+	b.WriteString("\t}\n")
+	b.WriteString("\treturn b.value, nil\n")
+	b.WriteString("}\n\n")
+}
+
+func writeWriteBuilder(
+	b *bytes.Buffer,
+	typeName string,
+	model NormalizedModel,
+) {
+	fieldNames := FieldGoNames(model.Fields)
+	builderType := typeName + "WriteBuilder"
+
+	fmt.Fprintf(
+		b,
+		"type %s struct {\n"+
+			"\tvalue %s_Write\n"+
+			"\terr error\n"+
+			"}\n\n",
+		builderType,
+		typeName,
+	)
+
+	fmt.Fprintf(
+		b,
+		"func New%[1]sWriteBuilder() *%[1]sWriteBuilder {\n"+
+			"\treturn &%[1]sWriteBuilder{\n"+
+			"\t\tvalue: %[1]s_Write{},\n"+
+			"\t}\n"+
+			"}\n\n",
+		typeName,
+	)
+
+	// Generate setters for EVERY writable field.
+	//
+	// Odoo's `required` flag is a create/model constraint. During write(),
+	// even a required model field is optional in the request because the caller
+	// may choose not to modify it.
+	for _, field := range model.Fields {
+		goName := fieldNames[field.Name]
+
+		writeBuilderSetter(
+			b,
+			builderType,
+			field,
+			goName,
+			readWriteGoType(field.Type),
+		)
+	}
+
+	fmt.Fprintf(
+		b,
+		"func (b *%s) Build() (%s_Write, error) {\n",
+		builderType,
+		typeName,
+	)
+
+	b.WriteString("\tif b.err != nil {\n")
+
+	fmt.Fprintf(
+		b,
+		"\t\treturn %s_Write{}, b.err\n",
+		typeName,
+	)
+
+	b.WriteString("\t}\n")
+	b.WriteString("\treturn b.value, nil\n")
+	b.WriteString("}\n\n")
 }
 
 func renderMethodsAPICall(b *bytes.Buffer, model NormalizedModel, typeName string) {
@@ -251,20 +630,33 @@ func renderMethodsAPICall(b *bytes.Buffer, model NormalizedModel, typeName strin
 
 func readGoType(fieldType SupportedFieldType) string {
 	switch fieldType {
-	case FieldBinary, FieldChar, FieldDate, FieldDatetime, FieldHTML, FieldSelection, FieldText:
+	case FieldBinary,
+		FieldChar,
+		FieldDate,
+		FieldDatetime,
+		FieldHTML,
+		FieldSelection,
+		FieldText:
 		return "odoo.FalseString"
+
 	case FieldBoolean:
 		return "bool"
+
 	case FieldFloat:
 		return "float64"
+
 	case FieldMonetary:
 		return "odoo.Monetary"
+
 	case FieldInteger:
 		return "int64"
+
 	case FieldMany2One:
 		return "odoo.Many2One"
+
 	case FieldOne2Many, FieldMany2Many:
 		return "[]odoo.ID"
+
 	default:
 		return "any"
 	}
@@ -272,25 +664,50 @@ func readGoType(fieldType SupportedFieldType) string {
 
 func readWriteGoType(fieldType SupportedFieldType) string {
 	switch fieldType {
-	case FieldBinary, FieldChar, FieldDate, FieldDatetime, FieldHTML, FieldSelection, FieldText:
+	case FieldBinary,
+		FieldChar,
+		FieldDate,
+		FieldDatetime,
+		FieldHTML,
+		FieldSelection,
+		FieldText:
 		return "*odoo.FalseString"
+
 	case FieldBoolean:
 		return "*bool"
+
 	case FieldFloat:
 		return "*float64"
+
 	case FieldMonetary:
 		return "*odoo.Monetary"
+
 	case FieldInteger:
 		return "*int64"
+
 	case FieldMany2One:
 		return "*odoo.Many2OneWrite"
+
 	case FieldOne2Many:
-		return "[]odoo.Many2ManyCommand"
-	case FieldMany2Many:
 		return "[]odoo.One2ManyCommand"
+
+	case FieldMany2Many:
+		return "[]odoo.Many2ManyCommand"
+
 	default:
 		return "any"
 	}
+}
+
+// Required create fields must always be present, therefore they use the concrete
+// read representation. Optional create fields use the write representation so
+// nil means "not supplied".
+func createGoType(field NormalizedField) string {
+	if field.Required {
+		return readGoType(field.Type)
+	}
+
+	return readWriteGoType(field.Type)
 }
 
 func SaveCacheJSON(cache MetadataCache) ([]byte, error) {
