@@ -53,11 +53,14 @@ func Render(cache MetadataCache, options RenderOptions) (ResultFile, error) {
 
 	resultFiles := ResultFile{}
 	for name, genFile := range genFiles {
-		formatted, err := format.Source(genFile.Content.Bytes())
+		bytesFile := genFile.Content.Bytes()
+		formatted, err := format.Source(bytesFile)
 		if err != nil {
-			return nil, fmt.Errorf("format generated Go source: %s%w", name, err)
+			resultFiles[name] = bytesFile
+			fmt.Errorf("format generated Go source: %s%w", name, err)
+		}else {
+			resultFiles[name] = formatted
 		}
-		resultFiles[name] = formatted
 	}
 	return resultFiles, nil
 }
@@ -151,7 +154,7 @@ func renderModel(b *bytes.Buffer, model NormalizedModel, typeName string) {
 
 	fmt.Fprintf(b, "type %sModel struct{}\n\n", typeName)
 	fmt.Fprintf(b, "func (%sModel) RecordType() *%s { return nil; }\n\n", typeName, typeName)
-	fmt.Fprintf(b, "func (%sModel) Name() string { return %q }\n\n", typeName, model.Name)
+	fmt.Fprintf(b, "func (%sModel) Name() string { return %q; }\n\n", typeName, model.Name)
 	fmt.Fprintf(b, "func (%sModel) Fields() []string {\n", typeName)
 	b.WriteString("\treturn []string{\n")
 	for _, field := range model.Fields {
@@ -229,7 +232,7 @@ func writeBuilderSetter(
 	case FieldMonetary:
 		b.WriteString("\tv, err := odoo.NewMonetary(value)\n")
 		b.WriteString("\tif err != nil {\n")
-		fmt.Fprintf(b, "b.err = errors.Join(b.err, fmt.Errorf(\"tip_amount: %%w\", err))")
+		fmt.Fprintf(b, "\t\tb.err = errors.Join(b.err, fmt.Errorf(\"tip_amount: %%w\", err))\n")
 		b.WriteString("\t\treturn b\n")
 		b.WriteString("\t}\n")
 
@@ -600,7 +603,7 @@ func renderMethodsAPICall(b *bytes.Buffer, model NormalizedModel, typeName strin
 	}
 
 	for _, m := range methods {
-		fmt.Fprintf(b, "func (a *API) %s%s(ctx context.Context, %s) %s { return odoo.%s(ctx, a.client, %sModel{}, %s) }\n",
+		fmt.Fprintf(b, "func (a *API) %s%s(ctx context.Context, %s) %s { return odoo.%s(ctx, a.client, %sModel{}, %s); }\n",
 			m.name,
 			typeName,
 			expand(m.args),
