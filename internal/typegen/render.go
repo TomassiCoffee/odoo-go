@@ -52,17 +52,18 @@ func Render(cache MetadataCache, options RenderOptions) (ResultFile, error) {
 	}
 
 	resultFiles := ResultFile{}
+	var error_list error = nil
 	for name, genFile := range genFiles {
 		bytesFile := genFile.Content.Bytes()
 		formatted, err := format.Source(bytesFile)
 		if err != nil {
 			resultFiles[name] = bytesFile
-			fmt.Errorf("format generated Go source: %s%w", name, err)
+			error_list = fmt.Errorf("format generated Go source: %s%w\n%w", name, err, error_list)
 		}else {
 			resultFiles[name] = formatted
 		}
 	}
-	return resultFiles, nil
+	return resultFiles, error_list
 }
 
 func renderModelHeader(b *bytes.Buffer, packageName string, odooImportPath string) {
