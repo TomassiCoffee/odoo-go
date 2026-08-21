@@ -73,9 +73,11 @@ func renderModelHeader(b *bytes.Buffer, packageName string, odooImportPath strin
 	b.WriteString("import (\n")
 	b.WriteString("\t\"fmt\"\n")
 	b.WriteString("\t\"context\"\n")
+	b.WriteString("\t\"errors\"\n")
 	fmt.Fprintf(b, "\t\"%s\"\n", odooImportPath)
 	b.WriteString(")\n\n")
 	b.WriteString("var _ = fmt.Errorf\n\n")
+	b.WriteString("var _ = errors.Join\n\n")
 }
 
 func renderRegistryHeader(b *bytes.Buffer, packageName string, odooImportPath string) {
